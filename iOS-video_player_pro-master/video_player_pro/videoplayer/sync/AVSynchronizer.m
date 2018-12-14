@@ -86,8 +86,10 @@ static BOOL isNetworkPath (NSString *path)
     return YES;
 }
 
+// 解码线程
 static void* runDecoderThread(void* ptr)
 {
+    // 转换类型
     AVSynchronizer* synchronizer = (__bridge AVSynchronizer*)ptr;
     [synchronizer run];
     return NULL;

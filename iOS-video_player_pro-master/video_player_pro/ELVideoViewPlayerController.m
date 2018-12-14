@@ -44,6 +44,7 @@
 
 - (void) viewWillDisappear:(BOOL)animated;
 {
+    // 停止音视频输出 和同步
     [_playerViewController stop];
     [_playerViewController.view removeFromSuperview];
     [_playerViewController removeFromParentViewController];
@@ -55,6 +56,7 @@
     [super didReceiveMemoryWarning];
     if ([_playerViewController isPlaying]) {
         NSLog(@"restart after memorywarning");
+        //
         [self restart];
     } else {
         [_playerViewController stop];
