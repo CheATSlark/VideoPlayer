@@ -156,9 +156,12 @@ static void* decodeFirstBufferRunLoop(void* ptr)
     while (good) {
         good = NO;
         @autoreleasepool {
+            // 解码存在 且可被 视频或音频解码
             if (_decoder && (_decoder.validVideo || _decoder.validAudio)) {
+                // 获取帧
                 NSArray *frames = [_decoder decodeFrames:duration decodeVideoErrorState:&_decodeVideoErrorState];
                 if (frames.count) {
+                    // 在最大缓冲时间添加
                     good = [self addFrames:frames duration:_maxBufferedDuration];
                 }
             }
@@ -487,6 +490,7 @@ float lastPosition = -1.0;
 - (BOOL) addFrames: (NSArray *)frames duration:(CGFloat) duration
 {
     if (_decoder.validVideo) {
+        // 对_videoFrames 进行加锁处理
         @synchronized(_videoFrames) {
             for (Frame *frame in frames)
                 if (frame.type == VideoFrameType || frame.type == iOSCVVideoFrameType) {
