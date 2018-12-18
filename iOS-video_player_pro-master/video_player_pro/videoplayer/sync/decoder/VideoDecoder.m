@@ -10,14 +10,22 @@
 #import <Accelerate/Accelerate.h>
 
 
+// 复制 帧数据 
 static NSData * copyFrameData(UInt8 *src, int linesize, int width, int height)
 {
+    // 行数大小 和 宽度的最小值
     width = MIN(linesize, width);
+    // 按照数据大小生成md
     NSMutableData *md = [NSMutableData dataWithLength: width * height];
+    // 字节数
     Byte *dst = md.mutableBytes;
+    // 在行数内
     for (NSUInteger i = 0; i < height; ++i) {
+        // 把 每行的数据 copy 到dst上
         memcpy(dst, src, width);
+        // 字节加上宽度
         dst += width;
+        // 数据加上每行的大小
         src += linesize;
     }
     return md;
@@ -25,22 +33,27 @@ static NSData * copyFrameData(UInt8 *src, int linesize, int width, int height)
 
 static void avStreamFPSTimeBase(AVStream *st, CGFloat defaultTimeBase, CGFloat *pFPS, CGFloat *pTimeBase)
 {
+    // 设置 fps、timebase 
     CGFloat fps, timebase;
-    
+    // 如果流的 帧的时间戳（以秒为单位）的分母、分子 存在
     if (st->time_base.den && st->time_base.num)
+        // 把时间戳结构体 转换成浮点类型
         timebase = av_q2d(st->time_base);
     else if(st->codec->time_base.den && st->codec->time_base.num)
         timebase = av_q2d(st->codec->time_base);
     else
         timebase = defaultTimeBase;
     
+    // 帧每秒流失的时间
     if (st->codec->ticks_per_frame != 1) {
         NSLog(@"WARNING: st.codec.ticks_per_frame=%d", st->codec->ticks_per_frame);
         //timebase *= st->codec->ticks_per_frame;
     }
     
+    // 平均帧率的 分母、分子 存在
     if (st->avg_frame_rate.den && st->avg_frame_rate.num)
         fps = av_q2d(st->avg_frame_rate);
+    // 真实的帧率
     else if (st->r_frame_rate.den && st->r_frame_rate.num)
         fps = av_q2d(st->r_frame_rate);
     else
@@ -55,7 +68,9 @@ static void avStreamFPSTimeBase(AVStream *st, CGFloat defaultTimeBase, CGFloat *
 static NSArray *collectStreams(AVFormatContext *formatCtx, enum AVMediaType codecType)
 {
     NSMutableArray *ma = [NSMutableArray array];
+    // 遍历文本中的流数目
     for (NSInteger i = 0; i < formatCtx->nb_streams; ++i)
+        // 如果是视频帧 把指数添加到数组
         if (codecType == formatCtx->streams[i]->codec->codec_type)
             [ma addObject: [NSNumber numberWithInteger: i]];
     return [ma copy];
@@ -110,6 +125,7 @@ static NSArray *collectStreams(AVFormatContext *formatCtx, enum AVMediaType code
 
 @implementation VideoDecoder
 
+// interrupt 回调
 static int interrupt_callback(void *ctx)
 {
     if (!ctx)
@@ -127,8 +143,9 @@ static int interrupt_callback(void *ctx)
     _isSubscribe = NO;
 }
 
-- (BOOL) detectInterrupted;
+- (BOOL) detectInterrupted
 {
+    // 当前事后 和最后一帧读取时间的差 大于 订阅超时
     if ([[NSDate date] timeIntervalSince1970] - _readLastestFrameTime > _subscribeTimeOutTimeInSecs) {
         return YES;
     }
@@ -141,18 +158,27 @@ static int interrupt_callback(void *ctx)
     if (nil == path) {
         return NO;
     }
-    _connectionRetry = 0;
-    totalVideoFramecount = 0;
-    _subscribeTimeOutTimeInSecs = SUBSCRIBE_VIDEO_DATA_TIME_OUT;
-    _interrupted = NO;
-    _isOpenInputSuccess = NO;
-    _isSubscribe = YES;
+    _connectionRetry = 0;   // 重试次数
+    totalVideoFramecount = 0;  //整个视频帧数
+    _subscribeTimeOutTimeInSecs = SUBSCRIBE_VIDEO_DATA_TIME_OUT;   //订阅超时时间
+    _interrupted = NO;  // 没有暂停
+    _isOpenInputSuccess = NO;  // 没有打开成功
+    _isSubscribe = YES;  // 是订阅
+    
+    // 实例化 buriedPoint
     _buriedPoint = [[BuriedPoint alloc] init];
+    // 实例化记录状态
     _buriedPoint.bufferStatusRecords = [[NSMutableArray alloc] init];
+    // 上一次读取时间
     _readLastestFrameTime = [[NSDate date] timeIntervalSince1970];
+    
+    // FFmpeg 初始化
     avformat_network_init();
     av_register_all();
+    
+    // 记录初始时间
     _buriedPoint.beginOpen = [[NSDate date] timeIntervalSince1970] * 1000;
+    // 打开文件
     int openInputErrCode = [self openInput:path parameter:parameters];
     if(openInputErrCode > 0) {
         _buriedPoint.successOpen = ([[NSDate date] timeIntervalSince1970] * 1000 - _buriedPoint.beginOpen) / 1000.0f;
@@ -201,22 +227,30 @@ static int interrupt_callback(void *ctx)
 
 - (BOOL) openVideoStream;
 {
+    // 重置解码流指数
     _videoStreamIndex = -1;
+    // 获得视频帧的指数NSNumber集合
     _videoStreams = collectStreams(_formatCtx, AVMEDIA_TYPE_VIDEO);
     for (NSNumber *n in _videoStreams) {
+        // 视频流指数
         const NSUInteger iStream = n.integerValue;
+        // 获取解码的文本
         AVCodecContext *codecCtx = _formatCtx->streams[iStream]->codec;
+        // 获得 AVCodec
         AVCodec *codec = avcodec_find_decoder(codecCtx->codec_id);
+        
         if (!codec) {
             NSLog(@"Find Video Decoder Failed codec_id %d CODEC_ID_H264 is %d", codecCtx->codec_id, CODEC_ID_H264);
             return NO;
         }
         int openCodecErrCode = 0;
+        // 用给定的codec 实例化 codecCtx   这不是一个线程安全的函数
         if ((openCodecErrCode = avcodec_open2(codecCtx, codec, NULL)) < 0) {
             NSLog(@"open Video Codec Failed openCodecErr is %s", av_err2str(openCodecErrCode));
             return NO;
         }
         
+        // 开辟视频帧内存
         _videoFrame = avcodec_alloc_frame();
         if (!_videoFrame) {
             NSLog(@"Alloc Video Frame Failed...");
@@ -224,10 +258,13 @@ static int interrupt_callback(void *ctx)
             return NO;
         }
         
+        // 视频帧 指数 、 视频帧编码内容
         _videoStreamIndex = iStream;
         _videoCodecCtx = codecCtx;
         // determine fps
+        // 获取视频流
         AVStream *st = _formatCtx->streams[_videoStreamIndex];
+        // 获取视频 fps 和 视频基准时间
         avStreamFPSTimeBase(st, 0.04, &_fps, &_videoTimeBase);
         break;
     }
@@ -310,17 +347,29 @@ static int interrupt_callback(void *ctx)
 
 - (int) openInput: (NSString*) path parameter:(NSDictionary*) parameters;
 {
+    // 初始化 格式内容
     AVFormatContext *formatCtx = avformat_alloc_context();
+    // 初始化暂停的回调
     AVIOInterruptCB int_cb  = {interrupt_callback, (__bridge void *)(self)};
+    // 赋值
     formatCtx->interrupt_callback = int_cb;
+    
+    
     int openInputErrCode = 0;
+    // 打开指定路径 和参数的文件 获取 formatCtx
     if ((openInputErrCode = [self openFormatInput:&formatCtx path:path parameter:parameters]) != 0) {
+        // 失败
         NSLog(@"Video decoder open input file failed... videoSourceURI is %@ openInputErr is %s", path, av_err2str(openInputErrCode));
+        // 释放内存
         if (formatCtx)
             avformat_free_context(formatCtx);
         return openInputErrCode;
     }
+    
+    // 初始化随着时间和大小解析
     [self initAnalyzeDurationAndProbesize:formatCtx parameter:parameters];
+    
+    
     int findStreamErrCode = 0;
     double startFindStreamTimeMills = CFAbsoluteTimeGetCurrent() * 1000;
     if ((findStreamErrCode = avformat_find_stream_info(formatCtx, NULL)) < 0) {
@@ -347,11 +396,14 @@ static int interrupt_callback(void *ctx)
 
 - (int) openFormatInput:(AVFormatContext**) formatCtx path:(NSString*) path parameter:(NSDictionary*) parameters
 {
+    // 转换路径为UTF8的字符串
     const char* videoSourceURI = [path cStringUsingEncoding: NSUTF8StringEncoding];
     AVDictionary *options = NULL;
+    //RTMP_TCURL_KEY 获取参数的 URL 路径
     NSString* rtmpTcurl = parameters[RTMP_TCURL_KEY];
     if([rtmpTcurl length] > 0){
         const char *rtmp_tcurl = [rtmpTcurl cStringUsingEncoding: NSUTF8StringEncoding];
+        // 设置字典
         av_dict_set(&options, "rtmp_tcurl", rtmp_tcurl, 0);
     }
     return avformat_open_input(formatCtx, videoSourceURI, NULL, &options);
@@ -359,8 +411,11 @@ static int interrupt_callback(void *ctx)
 
 - (void) initAnalyzeDurationAndProbesize:(AVFormatContext *)formatCtx parameter:(NSDictionary*) parameters
 {
+    // 获取参数中的尺寸
     float probeSize = [parameters[PROBE_SIZE] floatValue];
+    // 赋值formatCtx 的尺寸
     formatCtx->probesize = probeSize ?: 50 * 1024;
+    // 获取时间数组
     NSArray* durations = parameters[MAX_ANALYZE_DURATION_ARRAY];
     if (durations && durations.count > _connectionRetry) {
         formatCtx->max_analyze_duration = [durations[_connectionRetry] floatValue];
@@ -381,11 +436,13 @@ static int interrupt_callback(void *ctx)
     return _connectionRetry <= NET_WORK_STREAM_RETRY_TIME;
 }
 
+// 解码包
 - (VideoFrame*) decodeVideo:(AVPacket) packet packetSize:(int) pktSize decodeVideoErrorState:(int *)decodeVideoErrorState;
 {
     VideoFrame *frame = nil;
     while (pktSize > 0) {
         int gotframe = 0;
+        // 视频帧的字节长度
         int len = avcodec_decode_video2(_videoCodecCtx, _videoFrame,
                                         &gotframe,
                                         &packet);
@@ -394,6 +451,7 @@ static int interrupt_callback(void *ctx)
             *decodeVideoErrorState = 1;
             break;
         }
+        
         if (gotframe) {
             frame = [self handleVideoFrame];
         }
@@ -406,34 +464,51 @@ static int interrupt_callback(void *ctx)
 
 - (NSArray *) decodeFrames: (CGFloat) minDuration decodeVideoErrorState:(int *)decodeVideoErrorState
 {
+    // 若没有启动状态，则返回
     if (_videoStreamIndex == -1 && _audioStreamIndex == -1)
         return nil;
+    
     NSMutableArray *result = [NSMutableArray array];
     AVPacket packet;
     CGFloat decodedDuration = 0;
     BOOL finished = NO;
+    
     while (!finished) {
+        // 如果读取下一帧  如果等于0 是读取成功，小于0 错误或读到最后
         if (av_read_frame(_formatCtx, &packet) < 0) {
+            // 标志文件读取结束
             _isEOF = YES;
             break;
         }
+        // 数据包 的 大小、流的指数
         int pktSize = packet.size;
         int pktStreamIndex = packet.stream_index;
+        // 如果包的流指数 是视频流指数
         if (pktStreamIndex ==_videoStreamIndex) {
+            // 获取当前的时间
             double startDecodeTimeMills = CFAbsoluteTimeGetCurrent() * 1000;
+            // 获取视频帧
             VideoFrame* frame = [self decodeVideo:packet packetSize:pktSize decodeVideoErrorState:decodeVideoErrorState];
+            // 计算消耗时长
             int wasteTimeMills =CFAbsoluteTimeGetCurrent() * 1000 - startDecodeTimeMills;
+            // 解码视频帧总时长累加
             decodeVideoFrameWasteTimeMills += wasteTimeMills;
+            
             if(frame){
+                // 累计视频帧数
                 totalVideoFramecount++;
+                // 添加到数组中
                 [result addObject:frame];
+                // 计算总时长  如果时长大于总解码时长，则完成
                 decodedDuration += frame.duration;
                 if (decodedDuration > minDuration)
                     finished = YES;
             }
-        } else if (pktStreamIndex == _audioStreamIndex) {
+        }// 如果包的指数是音频流指数
+        else if (pktStreamIndex == _audioStreamIndex) {
             while (pktSize > 0) {
                 int gotframe = 0;
+                // 从avpacket 获取 大小和 和尺寸
                 int len = avcodec_decode_audio4(_audioCodecCtx, _audioFrame,
                                                 &gotframe,
                                                 &packet);
@@ -442,12 +517,17 @@ static int interrupt_callback(void *ctx)
                     NSLog(@"decode audio error, skip packet");
                     break;
                 }
+                // gotframe 大于0 说明可以解码
                 if (gotframe) {
+                    // 获取音频帧
                     AudioFrame * frame = [self handleAudioFrame];
                     if (frame) {
+                        // 添加音频帧
                         [result addObject:frame];
                         if (_videoStreamIndex == -1) {
+                            // 如果是初始化第一帧 记录解码的位置
                             _decodePosition = frame.position;
+                            // 计算总解码时长
                             decodedDuration += frame.duration;
                             if (decodedDuration > minDuration)
                                 finished = YES;
@@ -456,14 +536,17 @@ static int interrupt_callback(void *ctx)
                 }
                 if (0 == len)
                     break;
+                //减去 已经解码的字节大小
                 pktSize -= len;
             }
         } else {
             NSLog(@"We Can Not Process Stream Except Audio And Video Stream...");
         }
+        // 释放packet
         av_free_packet(&packet);
     }
 //    NSLog(@"decodedDuration is %.3f", decodedDuration);
+    // 读取最后一帧的时间
     _readLastestFrameTime = [[NSDate date] timeIntervalSince1970];
     return result;
 }
@@ -475,10 +558,14 @@ static int interrupt_callback(void *ctx)
 
 - (VideoFrame *) handleVideoFrame
 {
+    // 如果没哟数据返回
     if (!_videoFrame->data[0])
         return nil;
+    // 开辟视频帧空间
     VideoFrame *frame = [[VideoFrame alloc] init];
+    // 如果视频编码文本的像素格式 是 YUV420P 或者 YUVJ420P
     if(_videoCodecCtx->pix_fmt == AV_PIX_FMT_YUV420P || _videoCodecCtx->pix_fmt == AV_PIX_FMT_YUVJ420P){
+        
         frame.luma = copyFrameData(_videoFrame->data[0],
                                       _videoFrame->linesize[0],
                                       _videoCodecCtx->width,
@@ -494,11 +581,13 @@ static int interrupt_callback(void *ctx)
                                          _videoCodecCtx->width / 2,
                                          _videoCodecCtx->height / 2);
     } else{
+        // 如果没有重构对象 失败
         if (!_swsContext &&
             ![self setupScaler]) {
             NSLog(@"fail setup video scaler");
             return nil;
         }
+        // 把每行的 数据放在图片中 从Y=0 和 height 开始
         sws_scale(_swsContext,
                   (const uint8_t **)_videoFrame->data,
                   _videoFrame->linesize,
@@ -506,6 +595,7 @@ static int interrupt_callback(void *ctx)
                   _videoCodecCtx->height,
                   _picture.data,
                   _picture.linesize);
+        
         frame.luma = copyFrameData(_picture.data[0],
                                    _picture.linesize[0],
                                    _videoCodecCtx->width,
@@ -521,9 +611,12 @@ static int interrupt_callback(void *ctx)
                                       _videoCodecCtx->width / 2,
                                       _videoCodecCtx->height / 2);
     }
+    
     frame.width = _videoCodecCtx->width;
     frame.height = _videoCodecCtx->height;
+    
     frame.linesize = _videoFrame->linesize[0];
+    
     frame.type = VideoFrameType;
     frame.position = av_frame_get_best_effort_timestamp(_videoFrame) * _videoTimeBase;
     const int64_t frameDuration = av_frame_get_pkt_duration(_videoFrame);
@@ -558,22 +651,30 @@ static int interrupt_callback(void *ctx)
 
 - (AudioFrame *) handleAudioFrame
 {
+    // 如果音频帧的数据不存在 则返回空
     if (!_audioFrame->data[0])
         return nil;
-    
+    // 声道数目
     const NSUInteger numChannels = _audioCodecCtx->channels;
+    //
     NSInteger numFrames;
     
     void * audioData;
     
     if (_swrContext) {
         const NSUInteger ratio = 2;
+        // 对于给定的音频参数获得需要的缓存大小  nb_samples 帧的声道的采样数目  采样格式AV_SAMPLE_FMT_S16  采样的线形 默认0
         const int bufSize =  av_samples_get_buffer_size(NULL, (int)numChannels, (int)(_audioFrame->nb_samples * ratio), AV_SAMPLE_FMT_S16, 1);
+        
+        // 如果重采样的缓存不存在 或者重采样的字节空间太小
         if (!_swrBuffer || _swrBufferSize < bufSize) {
+            // 重新生成 _swrBufferSize 和 _swrBuffer
             _swrBufferSize = bufSize;
             _swrBuffer = realloc(_swrBuffer, _swrBufferSize);
         }
+        // 输出字节
         Byte *outbuf[2] = { _swrBuffer, 0 };
+        // 转换音频 每个声道采样数目
         numFrames = swr_convert(_swrContext,
                                 outbuf,
                                 (int)(_audioFrame->nb_samples * ratio),
@@ -585,6 +686,7 @@ static int interrupt_callback(void *ctx)
         }
         audioData = _swrBuffer;
     } else {
+        // 如果是AV_SAMPLE_FMT_S16
         if (_audioCodecCtx->sample_fmt != AV_SAMPLE_FMT_S16) {
             NSLog(@"Audio format is invalid");
             return nil;
@@ -592,18 +694,26 @@ static int interrupt_callback(void *ctx)
         audioData = _audioFrame->data[0];
         numFrames = _audioFrame->nb_samples;
     }
+    // 元素个数
     const NSUInteger numElements = numFrames * numChannels;
+    // 开辟pcm 数据
     NSMutableData *pcmData = [NSMutableData dataWithLength:numElements * sizeof(SInt16)];
+    // 内存拷贝
     memcpy(pcmData.mutableBytes, audioData, numElements * sizeof(SInt16));
+    // 实例化 音频帧
     AudioFrame *frame = [[AudioFrame alloc] init];
+    // 获取最佳的时间
     frame.position = av_frame_get_best_effort_timestamp(_audioFrame) * _audioTimeBase;
+    // 获取packet的时长
     frame.duration = av_frame_get_pkt_duration(_audioFrame) * _audioTimeBase;
+    
     frame.samples = pcmData;
     frame.type = AudioFrameType;
 //    NSLog(@"Add Audio Frame position is %.3f", frame.position);
     return frame;
 }
 
+// 出发第一屏幕
 - (void) triggerFirstScreen
 {
     if (_buriedPoint.failOpenType == 1) {
@@ -611,11 +721,14 @@ static int interrupt_callback(void *ctx)
     }
 }
 
+// 添加缓冲状态的记录
 - (void) addBufferStatusRecord:(NSString*) statusFlag
 {
+    // 如果等于“F” 且 buriedPoint 的拉流状态 最后一个头是 F_ 返回
     if ([@"F" isEqualToString:statusFlag] && [[_buriedPoint.bufferStatusRecords lastObject] hasPrefix:@"F_"]) {
         return;
     }
+    //记录时间和状态
     float timeInterval = ([[NSDate date] timeIntervalSince1970] * 1000 - _buriedPoint.beginOpen) / 1000.0f;
     [_buriedPoint.bufferStatusRecords addObject:[NSString stringWithFormat:@"%@_%.3f", statusFlag, timeInterval]];
 }
@@ -624,22 +737,28 @@ static int interrupt_callback(void *ctx)
 {
     NSLog(@"Enter closeFile...");
     if (_buriedPoint.failOpenType == 1) {
+        // 记录时长
         _buriedPoint.duration = ([[NSDate date] timeIntervalSince1970] * 1000 - _buriedPoint.beginOpen) / 1000.0f;
     }
+    //暂停 重置订阅超时时长  是暂停 未订阅
     [self interrupt];
     
+    // 关闭音频流和视频流
     [self closeAudioStream];
     [self closeVideoStream];
     
+    // 置空
     _videoStreams = nil;
     _audioStreams = nil;
     
+    // 格式文本存在  置空
     if (_formatCtx) {
         _formatCtx->interrupt_callback.opaque = NULL;
         _formatCtx->interrupt_callback.callback = NULL;
         avformat_close_input(&_formatCtx);
         _formatCtx = NULL;
     }
+    // 解码的平均时长
     float decodeFrameAVGTimeMills = (double)decodeVideoFrameWasteTimeMills / (float)totalVideoFramecount;
     NSLog(@"Decoder decoder totalVideoFramecount is %d decodeFrameAVGTimeMills is %.3f", totalVideoFramecount, decodeFrameAVGTimeMills);
 }
@@ -672,10 +791,13 @@ static int interrupt_callback(void *ctx)
 
 - (void) closeVideoStream;
 {
+    // 重置指数
     _videoStreamIndex = -1;
     
+    // 关闭纯量 关闭重采样 和图片
     [self closeScaler];
     
+    // 释放帧 和 编码文本
     if (_videoFrame) {
         av_free(_videoFrame);
         _videoFrame = NULL;
@@ -769,9 +891,11 @@ static int interrupt_callback(void *ctx)
 - (CGFloat) getDuration;
 {
     if(_formatCtx){
+        // 没有提供tpts的值
         if(_formatCtx->duration == AV_NOPTS_VALUE){
             return -1;
         }
+        // 格式文本的时长 / 1000000
         return _formatCtx->duration / AV_TIME_BASE;
     }
     return -1;
