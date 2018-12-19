@@ -366,7 +366,7 @@ static int interrupt_callback(void *ctx)
         return openInputErrCode;
     }
     
-    // 初始化随着时间和大小解析
+    // 初始化 最大解析时长 和 大小
     [self initAnalyzeDurationAndProbesize:formatCtx parameter:parameters];
     
     
@@ -415,11 +415,13 @@ static int interrupt_callback(void *ctx)
     float probeSize = [parameters[PROBE_SIZE] floatValue];
     // 赋值formatCtx 的尺寸
     formatCtx->probesize = probeSize ?: 50 * 1024;
-    // 获取时间数组
+    // 获取时间数组  max_analyze_duration_array
     NSArray* durations = parameters[MAX_ANALYZE_DURATION_ARRAY];
     if (durations && durations.count > _connectionRetry) {
+        // 解码 在avformat_find_stream_info() 解析的最大时长
         formatCtx->max_analyze_duration = [durations[_connectionRetry] floatValue];
     } else {
+        // 2.0 的 重试次 方 乘以 0.25 加上 0.5
         float multiplier = 0.5 + (double)pow(2.0, (double)_connectionRetry) * 0.25;
         formatCtx->max_analyze_duration = multiplier * AV_TIME_BASE;
     }
