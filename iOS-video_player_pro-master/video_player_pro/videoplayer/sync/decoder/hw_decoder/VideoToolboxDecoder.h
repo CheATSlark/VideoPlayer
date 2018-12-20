@@ -12,14 +12,15 @@
 
 @protocol H264DecoderDelegate <NSObject>
 @optional
-
+// 获取解压的图像数据
 -(void) getDecodeImageData:(CVImageBufferRef) imageBuffer;
 @end
 
 @interface VideoToolboxDecoder : VideoDecoder
-
+// H264解码代理
 @property (nonatomic, strong) id <H264DecoderDelegate> delegate;
-
+// 视频格式的描述
 @property (nonatomic, assign) CMVideoFormatDescriptionRef formatDesc;
+// Video Tool 解压会话
 @property (nonatomic, assign) VTDecompressionSessionRef decompressionSession;
 @end

@@ -464,8 +464,11 @@ static int interrupt_callback(void *ctx)
     return frame;
 }
 
+// 解码视频帧 返回结果 最多返回带有一个视频帧
 - (NSArray *) decodeFrames: (CGFloat) minDuration decodeVideoErrorState:(int *)decodeVideoErrorState
 {
+    // 这里面 minDuration 的值 为0，只要解出一帧带有时长，就会跳出 while循环
+    
     // 若没有启动状态，则返回
     if (_videoStreamIndex == -1 && _audioStreamIndex == -1)
         return nil;
@@ -474,6 +477,8 @@ static int interrupt_callback(void *ctx)
     AVPacket packet;
     CGFloat decodedDuration = 0;
     BOOL finished = NO;
+    
+    NSLog(@"start--------->decode Packet");
     
     while (!finished) {
         // 如果读取下一帧  如果等于0 是读取成功，小于0 错误或读到最后
@@ -500,6 +505,7 @@ static int interrupt_callback(void *ctx)
                 // 累计视频帧数
                 totalVideoFramecount++;
                 // 添加到数组中
+                NSLog(@"add video----->to arr");
                 [result addObject:frame];
                 // 计算总时长  如果时长大于总解码时长，则完成
                 decodedDuration += frame.duration;
@@ -525,7 +531,10 @@ static int interrupt_callback(void *ctx)
                     AudioFrame * frame = [self handleAudioFrame];
                     if (frame) {
                         // 添加音频帧
+                        NSLog(@"add audio---->to arr");
                         [result addObject:frame];
+                        
+                        // _videoStreamIndex 为0 一般不会进这里
                         if (_videoStreamIndex == -1) {
                             // 如果是初始化第一帧 记录解码的位置
                             _decodePosition = frame.position;
@@ -550,6 +559,7 @@ static int interrupt_callback(void *ctx)
 //    NSLog(@"decodedDuration is %.3f", decodedDuration);
     // 读取最后一帧的时间
     _readLastestFrameTime = [[NSDate date] timeIntervalSince1970];
+    NSLog(@"end-------->decode Packet");
     return result;
 }
 

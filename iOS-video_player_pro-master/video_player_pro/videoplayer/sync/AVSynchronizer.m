@@ -109,10 +109,12 @@ static void* runDecoderThread(void* ptr)
 //        NSLog(@"After wait First decode Buffer...");
         pthread_mutex_unlock(&videoDecoderLock);
         //			LOGI("after pthread_cond_wait");
+        // 循环进行解码操作
         [self decodeFrames];
     }
 }
 
+// 解码第一个缓冲runloop
 static void* decodeFirstBufferRunLoop(void* ptr)
 {
     AVSynchronizer* synchronizer = (__bridge AVSynchronizer*)ptr;
@@ -122,7 +124,9 @@ static void* decodeFirstBufferRunLoop(void* ptr)
 
 - (void) decodeFirstBuffer
 {
+    // 获取当前第一缓冲区时间
     double startDecodeFirstBufferTimeMills = CFAbsoluteTimeGetCurrent() * 1000;
+    // 在 0.5 解码帧
     [self decodeFramesWithDuration:FIRST_BUFFER_DURATION];
     int wasteTimeMills = CFAbsoluteTimeGetCurrent() * 1000 - startDecodeFirstBufferTimeMills;
     NSLog(@"Decode First Buffer waste TimeMills is %d", wasteTimeMills);
@@ -158,11 +162,15 @@ static void* decodeFirstBufferRunLoop(void* ptr)
         @autoreleasepool {
             // 解码存在 且可被 视频或音频解码
             if (_decoder && (_decoder.validVideo || _decoder.validAudio)) {
-                // 获取帧
+                // 获取帧 只包含一个视频帧 可以有多个音频帧
                 NSArray *frames = [_decoder decodeFrames:duration decodeVideoErrorState:&_decodeVideoErrorState];
                 if (frames.count) {
                     // 在最大缓冲时间添加
+                    // 对音视频帧 进行分类
                     good = [self addFrames:frames duration:_maxBufferedDuration];
+                    if (good == NO) {
+                        
+                    }
                 }
             }
         }
@@ -489,8 +497,10 @@ float lastPosition = -1.0;
 
 - (BOOL) addFrames: (NSArray *)frames duration:(CGFloat) duration
 {
+    NSLog(@"arr classfiy ------>start");
     if (_decoder.validVideo) {
         // 对_videoFrames 进行加锁处理
+        NSLog(@"vide classfiy");
         @synchronized(_videoFrames) {
             for (Frame *frame in frames)
                 if (frame.type == VideoFrameType || frame.type == iOSCVVideoFrameType) {
@@ -500,6 +510,7 @@ float lastPosition = -1.0;
     }
     
     if (_decoder.validAudio) {
+        NSLog(@"aduio classfiy");
         @synchronized(_audioFrames) {
             for (Frame *frame in frames)
                 if (frame.type == AudioFrameType) {
@@ -508,6 +519,7 @@ float lastPosition = -1.0;
                 }
         }
     }
+    NSLog(@"arr classfiy ------>end");
     return _bufferedDuration < duration;
 }
 

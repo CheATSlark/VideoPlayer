@@ -22,6 +22,7 @@
 - (instancetype)init {
     self = [super init];
     if (self) {
+        // 创建信号量 初始设为0 返回NULL
         _decoderSemaphore = dispatch_semaphore_create(0);
     }
     return self;
@@ -35,11 +36,14 @@
         uint8_t* bufPPS = 0;
         int sizeSPS = 0;
         int sizePPS = 0;
+        // 句法H264顺序头
         [self parseH264SequenceHeader:(uint8_t*) _videoCodecCtx->extradata bufferSize:(uint32_t) _videoCodecCtx->extradata_size
                                bufSPS:&bufSPS sizeSPS:&sizeSPS
                                bufPPS:&bufPPS sizePPS:&sizePPS];
+        
         uint8_t*  parameterSetPointers[2] = {bufSPS, bufPPS};
         size_t parameterSetSizes[2] = {sizeSPS, sizePPS};
+        
         OSStatus status = CMVideoFormatDescriptionCreateFromH264ParameterSets(kCFAllocatorDefault, 2,
                                                                      (const uint8_t *const*)parameterSetPointers,
                                                                      parameterSetSizes, 4,
