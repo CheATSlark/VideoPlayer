@@ -228,9 +228,13 @@ static void* decodeFirstBufferRunLoop(void* ptr)
         }
     }
     _usingHWCodec = usingHWCodec;
+    
+    
+    // 创建 _decoder 的实例
     [self createDecoderInstance];
     //2、初始化成员变量
     _currentVideoFrame = NULL;
+    
     _currentAudioFramePos = 0;
     
     _bufferedBeginTime = 0;
@@ -238,12 +242,16 @@ static void* decodeFirstBufferRunLoop(void* ptr)
     
     _decodeVideoErrorBeginTime = 0;
     _decodeVideoErrorTotalTime = 0;
+    
     isFirstScreen = YES;
     
+    // 获取最大、小缓冲时间
     _minBufferedDuration = [parameters[kMIN_BUFFERED_DURATION] floatValue];
     _maxBufferedDuration = [parameters[kMAX_BUFFERED_DURATION] floatValue];
     
     BOOL isNetwork = isNetworkPath(path);
+    
+    // 如果 _minBufferedDuration 的绝对值 小于 最小非负的浮点值
     if (ABS(_minBufferedDuration - 0.f) < CGFLOAT_MIN) {
         if(isNetwork){
             _minBufferedDuration = NETWORK_MIN_BUFFERED_DURATION;
@@ -251,7 +259,7 @@ static void* decodeFirstBufferRunLoop(void* ptr)
             _minBufferedDuration = LOCAL_MIN_BUFFERED_DURATION;
         }
     }
-    
+    // _maxBufferedDuration
     if ((ABS(_maxBufferedDuration - 0.f) < CGFLOAT_MIN)) {
         if(isNetwork){
             _maxBufferedDuration = NETWORK_MAX_BUFFERED_DURATION;
@@ -260,14 +268,18 @@ static void* decodeFirstBufferRunLoop(void* ptr)
         }
     }
     
+    // 保证最大值 不小于 最小值
     if (_minBufferedDuration > _maxBufferedDuration) {
         float temp = _minBufferedDuration;
         _minBufferedDuration = _maxBufferedDuration;
         _maxBufferedDuration = temp;
     }
     
+    // 同步最大时间不同
     _syncMaxTimeDiff = LOCAL_AV_SYNC_MAX_TIME_DIFF;
+    // 第一个缓冲区时长
     _firstBufferDuration = FIRST_BUFFER_DURATION;
+    
     //3、打开流并且解析出来音视频流的Context
     BOOL openCode = [_decoder openFile:path parameter:parameters error:perror];
     if(!openCode || ![_decoder isSubscribed] || isDestroyed){
@@ -284,17 +296,22 @@ static void* decodeFirstBufferRunLoop(void* ptr)
     //5、开启解码线程与解码队列
     _audioFrames        = [NSMutableArray array];
     _videoFrames        = [NSMutableArray array];
+    // 开启解码线程
     [self startDecoderThread];
+    // 开始解码第一个缓冲线程
     [self startDecodeFirstBufferThread];
     return OPEN_SUCCESS;
 }
 
 - (void) startDecodeFirstBufferThread
 {
+    // 初始化 线程互斥
     pthread_mutex_init(&decodeFirstBufferLock, NULL);
+    // 初始化 第一缓冲线程条件
     pthread_cond_init(&decodeFirstBufferCondition, NULL);
-    isDecodingFirstBuffer = true;
     
+    isDecodingFirstBuffer = true;
+    // 创建执行线程
     pthread_create(&decodeFirstBufferThread, NULL, decodeFirstBufferRunLoop, (__bridge void*)self);
 }
 
@@ -304,9 +321,14 @@ static void* decodeFirstBufferRunLoop(void* ptr)
     
     isOnDecoding = true;
     isDestroyed = false;
+    // 初始化 视频解码线程锁
     pthread_mutex_init(&videoDecoderLock, NULL);
+    // 初始化 视频解码线程条件
     pthread_cond_init(&videoDecoderCondition, NULL);
+    
     isInitializeDecodeThread = true;
+    // 创建 视频解码线程  执行解码操作
+    // 第一参数 传出的线程   第二个 线程参数 NULL为使用默认配置  第三个 执行的函数   第三个 函数的参数
     pthread_create(&videoDecoderThread, NULL, runDecoderThread, (__bridge void*)self);
 }
 
@@ -364,29 +386,38 @@ float lastPosition = -1.0;
     }
 }
 
+// 控制器调取
 - (void) audioCallbackFillData: (SInt16 *) outData
                      numFrames: (UInt32) numFrames
                    numChannels: (UInt32) numChannels;
 {
+    // 检查状态，且进行下一帧解码
     [self checkPlayState];
     if (_buffered) {
+        // 把内存中的outData 的numFrames*numChannels*sizeof(SInt16)的字符设为0
         memset(outData, 0, numFrames * numChannels * sizeof(SInt16));
         return;
     }
     @autoreleasepool {
+        //当帧数大于0的时候
         while (numFrames > 0) {
+            // 如果不存在当前音频数据
             if (!_currentAudioFrame) {
-                //从队列中取出音频数据
+                //从队列中取出音频数据 、初始化
                 @synchronized(_audioFrames) {
                     NSUInteger count = _audioFrames.count;
                     if (count > 0) {
+                        // 把音频帧数组里面的第一个 音频帧对象取出
                         AudioFrame *frame = _audioFrames[0];
+                        // 减去对应的时长
                         _bufferedDuration -= frame.duration;
-                        
+                        // 移除
                         [_audioFrames removeObjectAtIndex:0];
+                        // 获取帧的位置
                         _audioPosition = frame.position;
-                        
+        
                         _currentAudioFramePos = 0;
+                        // 获取帧的采样数据
                         _currentAudioFrame = frame.samples;
                     }
                 }
@@ -399,8 +430,11 @@ float lastPosition = -1.0;
                 const NSUInteger bytesToCopy = MIN(numFrames * frameSizeOf, bytesLeft);
                 const NSUInteger framesToCopy = bytesToCopy / frameSizeOf;
                 
+                // 把数据bytes复制到 outData
                 memcpy(outData, bytes, bytesToCopy);
+                // 减去framesToCopy
                 numFrames -= framesToCopy;
+                // 加上
                 outData += framesToCopy * numChannels;
                 
                 if (bytesToCopy < bytesLeft)
@@ -447,10 +481,13 @@ float lastPosition = -1.0;
         }
         return;
     }
+    // 解码器为音频、视频可用 获得，视频帧和音频帧的数目
     const NSUInteger leftVideoFrames = _decoder.validVideo ? _videoFrames.count : 0;
     const NSUInteger leftAudioFrames = _decoder.validAudio ? _audioFrames.count : 0;
+    
     if (0 == leftVideoFrames || 0 == leftAudioFrames) {
         //Buffer Status Empty Record
+        // 缓冲区的没有记录
         [_decoder addBufferStatusRecord:@"E"];
         if (_minBufferedDuration > 0 && !_buffered) {
             _buffered = YES;
@@ -469,6 +506,7 @@ float lastPosition = -1.0;
     
     if (_buffered) {
         _bufferedTotalTime = [[NSDate date] timeIntervalSince1970] - _bufferedBeginTime;
+        // 如果解码总时长超时  重新启动
         if (_bufferedTotalTime > TIMEOUT_BUFFER) {
             _bufferedTotalTime = 0;
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -484,13 +522,16 @@ float lastPosition = -1.0;
         }
     }
     
+    // 
     if (!isDecodingFirstBuffer && (0 == leftVideoFrames || 0 == leftAudioFrames || !(_bufferedDuration > _minBufferedDuration))) {
 #ifdef DEBUG
 //        NSLog(@"AVSynchronizer _bufferedDuration is %.3f _minBufferedDuration is %.3f", _bufferedDuration, _minBufferedDuration);
 #endif
+        // 发送解码信号
         [self signalDecoderThread];
     } else if(_bufferedDuration >= _maxBufferedDuration) {
         //Buffer Status Full Record
+        // 缓冲区添加记录
         [_decoder addBufferStatusRecord:@"F"];
     }
 }
