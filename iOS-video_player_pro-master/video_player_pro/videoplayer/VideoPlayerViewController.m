@@ -96,17 +96,21 @@
     _synchronizer = [[AVSynchronizer alloc] initWithPlayerStateDelegate:_playerStateDelegate];
     __weak VideoPlayerViewController *weakSelf = self;
     BOOL isIOS8OrUpper = ([[[UIDevice currentDevice] systemVersion] floatValue] >= 8.0);
+    // 创建一个高性能线程
     dispatch_async(dispatch_get_global_queue(isIOS8OrUpper ? QOS_CLASS_USER_INTERACTIVE:DISPATCH_QUEUE_PRIORITY_HIGH, 0) , ^{
         __strong VideoPlayerViewController *strongSelf = weakSelf;
         if (strongSelf) {
             NSError *error = nil;
             OpenState state = OPEN_FAILED;
+            // 如果含有参数
             if([_parameters count] > 0){
                 state = [strongSelf->_synchronizer openFile:_videoFilePath usingHWCodec:_usingHWCodec parameters:_parameters error:&error];
             } else {
                 state = [strongSelf->_synchronizer openFile:_videoFilePath usingHWCodec:_usingHWCodec error:&error];
             }
+            // 是否使用硬解
             _usingHWCodec = [strongSelf->_synchronizer usingHWCodec];
+            
             if(OPEN_SUCCESS == state){
                 //启动AudioOutput与VideoOutput
                 _videoOutput = [strongSelf createVideoOutputInstance];
