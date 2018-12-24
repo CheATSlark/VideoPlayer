@@ -36,18 +36,18 @@
 @implementation VideoOutput 
 {
     EAGLContext*                            _context;
-    GLuint                                  _displayFramebuffer;
-    GLuint                                  _renderbuffer;
+    GLuint                                  _displayFramebuffer;      //展示buffer
+    GLuint                                  _renderbuffer;          //渲染buffer
     GLint                                   _backingWidth;
     GLint                                   _backingHeight;
     
     BOOL                                    _stopping;
     
-    YUVFrameCopier*                         _videoFrameCopier;
+    YUVFrameCopier*                         _videoFrameCopier;      //视频帧编译
     
-    BaseEffectFilter*                       _filter;
+    BaseEffectFilter*                       _filter;           //基础作用滤镜
     
-    DirectPassRenderer*                     _directPassRenderer;
+    DirectPassRenderer*                     _directPassRenderer;     //直接传递渲染
 }
 
 + (Class) layerClass
@@ -63,61 +63,84 @@
 {
     self = [super initWithFrame:frame];
     if (self) {
+        // 生成OpenGL 的线程锁
         _shouldEnableOpenGLLock = [NSLock new];
+        // 锁住线程
         [_shouldEnableOpenGLLock lock];
+        // 判断当前是否在激活状态
         _shouldEnableOpenGL = [UIApplication sharedApplication].applicationState == UIApplicationStateActive;
+        // 解锁线程
         [_shouldEnableOpenGLLock unlock];
         
+        // 监听应用
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationWillResignActive:) name:UIApplicationWillResignActiveNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationDidBecomeActive:) name:UIApplicationDidBecomeActiveNotification object:nil];
         
+        // 赋值layer
         CAEAGLLayer *eaglLayer = (CAEAGLLayer*) self.layer;
+        //
         eaglLayer.opaque = YES;
+        // 设置绘制参数 0 drawablepropertyretainedbacking  colorformatRGBA8 drawablepropertycolorformat
         eaglLayer.drawableProperties = [NSDictionary dictionaryWithObjectsAndKeys:
                                         [NSNumber numberWithBool:FALSE], kEAGLDrawablePropertyRetainedBacking,
                                         kEAGLColorFormatRGBA8, kEAGLDrawablePropertyColorFormat,
                                         nil];
-        
+        // 实例化线程
         _renderOperationQueue = [[NSOperationQueue alloc] init];
+        // 最大操作数目是1
         _renderOperationQueue.maxConcurrentOperationCount = 1;
         _renderOperationQueue.name = @"com.changba.video_player.videoRenderQueue";
         
         __weak VideoOutput *weakSelf = self;
+        // 添加到队列中执行
         [_renderOperationQueue addOperationWithBlock:^{
             if (!weakSelf) {
                 return;
             }
 
             __strong VideoOutput *strongSelf = weakSelf;
+            
+            // 初始化 OpenGL ES 的文本内容 是否带有 EAGLSharegroup
             if (shareGroup) {
                 strongSelf->_context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2 sharegroup:shareGroup];
             } else {
                 strongSelf->_context = [[EAGLContext alloc] initWithAPI:kEAGLRenderingAPIOpenGLES2];
             }
             
+            // 判断_context 是否存在， 且把_context 设置为当前的context
             if (!strongSelf->_context || ![EAGLContext setCurrentContext:strongSelf->_context]) {
                 NSLog(@"Setup EAGLContext Failed...");
             }
+            //  创建展示的帧缓冲区
             if(![strongSelf createDisplayFramebuffer]){
                 NSLog(@"create Dispaly Framebuffer failed...");
             }
             
+            // 是否创建硬解实例
             [strongSelf createCopierInstance:usingHWCodec];
+            
+            // 是否准备按照 宽、高 进行渲染
             if (![strongSelf->_videoFrameCopier prepareRender:textureWidth height:textureHeight]) {
                 NSLog(@"_videoFrameFastCopier prepareRender failed...");
             }
             
+            // 创建图像对比度处理滤镜实例
             strongSelf->_filter = [self createImageProcessFilterInstance];
+            // 对比度滤镜的准备
             if (![strongSelf->_filter prepareRender:textureWidth height:textureHeight]) {
                 NSLog(@"_contrastEnhancerFilter prepareRender failed...");
             }
+            // 把视频编译的输出ID 赋 给对比度滤镜
             [strongSelf->_filter setInputTexture:[strongSelf->_videoFrameCopier outputTextureID]];
             
+            // 实例化直传渲染
             strongSelf->_directPassRenderer = [[DirectPassRenderer alloc] init];
             if (![strongSelf->_directPassRenderer prepareRender:textureWidth height:textureHeight]) {
                 NSLog(@"_directPassRenderer prepareRender failed...");
             }
+            // 把对比滤镜的输出ID 赋给 直传滤镜
             [strongSelf->_directPassRenderer setInputTexture:[strongSelf->_filter outputTextureID]];
+            
             strongSelf.readyToRender = YES;
         }];
     }
@@ -137,8 +160,10 @@
 - (void) createCopierInstance:(BOOL) usingHWCodec
 {
     if(usingHWCodec){
+        // 使用硬解
         _videoFrameCopier = [[YUVFrameFastCopier alloc] init];
     } else{
+        // 使用软解
         _videoFrameCopier = [[YUVFrameCopier alloc] init];
     }
 }
@@ -205,26 +230,40 @@ static const NSInteger kMaxOperationQueueCount = 3;
 - (BOOL) createDisplayFramebuffer;
 {
     BOOL ret = TRUE;
+    // 创建帧缓冲区
     glGenFramebuffers(1, &_displayFramebuffer);
+    // 创建绘制缓冲区
     glGenRenderbuffers(1, &_renderbuffer);
+    // 绑定帧缓冲区到渲染管线
     glBindFramebuffer(GL_FRAMEBUFFER, _displayFramebuffer);
+   // 绑定绘制缓存区到渲染管线
     glBindRenderbuffer(GL_RENDERBUFFER, _renderbuffer);
+    
+    // 为绘制缓存区分配存储区
     [_context renderbufferStorage:GL_RENDERBUFFER fromDrawable:(CAEAGLLayer*)self.layer];
+    
+    // 获取绘制缓冲区的像素 宽、高
     glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_WIDTH, &_backingWidth);
     glGetRenderbufferParameteriv(GL_RENDERBUFFER, GL_RENDERBUFFER_HEIGHT, &_backingHeight);
+    
+    // 将绘制缓冲区绑定到帧缓冲区
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, _renderbuffer);
     
+    // 检查帧缓存区的状态
     GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (status != GL_FRAMEBUFFER_COMPLETE) {
         NSLog(@"failed to make complete framebuffer object %x", status);
         return FALSE;
     }
-    
+    // 获取错误
     GLenum glError = glGetError();
+    // 没有错误
     if (GL_NO_ERROR != glError) {
         NSLog(@"failed to setup GL %x", glError);
         return FALSE;
     }
+
+    NSLog(@"------------%d -------------%d",GL_NO_ERROR,glError);
     return ret;
 }
 

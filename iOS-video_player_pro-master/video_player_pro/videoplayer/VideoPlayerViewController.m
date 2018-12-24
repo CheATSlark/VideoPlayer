@@ -113,16 +113,23 @@
             
             if(OPEN_SUCCESS == state){
                 //启动AudioOutput与VideoOutput
+                // 创建视频输出实例  继承自UIView
                 _videoOutput = [strongSelf createVideoOutputInstance];
+                // 保持比例填充会被切割
                 _videoOutput.contentMode = UIViewContentModeScaleAspectFill;
+                // 自动调节
                 _videoOutput.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleRightMargin | UIViewAutoresizingFlexibleLeftMargin | UIViewAutoresizingFlexibleHeight | UIViewAutoresizingFlexibleBottomMargin;
+                
                 dispatch_async(dispatch_get_main_queue(), ^{
                     self.view.backgroundColor = [UIColor clearColor];
+                    // 把_videoOutput 添加到最底层
                     [self.view insertSubview:_videoOutput atIndex:0];
                 });
+                
                 NSInteger audioChannels = [_synchronizer getAudioChannels];
                 NSInteger audioSampleRate = [_synchronizer getAudioSampleRate];
                 NSInteger bytesPerSample = 2;
+                // 创建音频输出对象
                 _audioOutput = [[AudioOutput alloc] initWithChannels:audioChannels sampleRate:audioSampleRate bytesPerSample:bytesPerSample filleDataDelegate:self];
                 [_audioOutput play];
                 _isPlaying = YES;
@@ -141,9 +148,12 @@
 
 - (VideoOutput*) createVideoOutputInstance;
 {
+    // 获取控制器的视图的尺寸
     CGRect bounds = self.view.bounds;
+    // 获取解码视频帧的长、宽
     NSInteger textureWidth = [_synchronizer getVideoFrameWidth];
     NSInteger textureHeight = [_synchronizer getVideoFrameHeight];
+    
     return [[VideoOutput alloc] initWithFrame:bounds
                                  textureWidth:textureWidth
                                 textureHeight:textureHeight
