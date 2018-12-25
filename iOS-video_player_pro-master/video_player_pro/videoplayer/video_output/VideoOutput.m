@@ -182,10 +182,14 @@ static const NSInteger kMaxOperationQueueCount = 3;
         return;
     }
     
+    // 进行加锁
     @synchronized (self.renderOperationQueue) {
         NSInteger operationCount = _renderOperationQueue.operationCount;
+        // 如果队列中超过最大设置
         if (operationCount > kMaxOperationQueueCount) {
+            // 对队列中的操作数组 进行 保留3个
             [_renderOperationQueue.operations enumerateObjectsUsingBlock:^(__kindof NSOperation * _Nonnull operation, NSUInteger idx, BOOL * _Nonnull stop) {
+                // 如果数目大于最大值 则取消
                 if (idx < operationCount - kMaxOperationQueueCount) {
                     [operation cancel];
                 } else {
@@ -205,22 +209,33 @@ static const NSInteger kMaxOperationQueueCount = 3;
             __strong VideoOutput *strongSelf = weakSelf;
             
             [strongSelf.shouldEnableOpenGLLock lock];
+            // 判断是否准备好了
             if (!strongSelf.readyToRender || !strongSelf.shouldEnableOpenGL) {
                 glFinish();
                 [strongSelf.shouldEnableOpenGLLock unlock];
                 return;
             }
             [strongSelf.shouldEnableOpenGLLock unlock];
+            
+            // 计数加一
             count++;
+            // 获取帧的宽、高
             int frameWidth = (int)[frame width];
             int frameHeight = (int)[frame height];
+            // 设置当前的OpenGL 的context 内容
             [EAGLContext setCurrentContext:strongSelf->_context];
-            [strongSelf->_videoFrameCopier renderWithTexId:frame];
-            [strongSelf->_filter renderWithWidth:frameWidth height:frameHeight position:frame.position];
             
+            [strongSelf->_videoFrameCopier renderWithTexId:frame];
+            
+            [strongSelf->_filter renderWithWidth:frameWidth height:frameHeight position:frame.position];
+            // 绑定视频帧缓冲区
             glBindFramebuffer(GL_FRAMEBUFFER, strongSelf->_displayFramebuffer);
+            
             [strongSelf->_directPassRenderer renderWithWidth:strongSelf->_backingWidth height:strongSelf->_backingHeight position:frame.position];
+            // 绑定绘制缓冲
             glBindRenderbuffer(GL_RENDERBUFFER, strongSelf->_renderbuffer);
+            
+            // 展示
             [strongSelf->_context presentRenderbuffer:GL_RENDERBUFFER];
         }];
     }

@@ -11,8 +11,11 @@
 #import <OpenGLES/ES2/gl.h>
 #import <OpenGLES/ES2/glext.h>
 
+// 添加#
 #define STRINGIZE(x) #x
+// 添加##
 #define STRINGIZE2(x) STRINGIZE(x)
+
 #define SHADER_STRING(text) @ STRINGIZE2(text)
 
 @protocol ImageFilterInput <NSObject>
