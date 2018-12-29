@@ -11,11 +11,9 @@
 #import <OpenGLES/ES2/gl.h>
 #import <OpenGLES/ES2/glext.h>
 
-// 添加#
+// 字符串化宏
 #define STRINGIZE(x) #x
-// 添加##
 #define STRINGIZE2(x) STRINGIZE(x)
-
 #define SHADER_STRING(text) @ STRINGIZE2(text)
 
 // 图像滤镜的输入回调 子类添加的方法

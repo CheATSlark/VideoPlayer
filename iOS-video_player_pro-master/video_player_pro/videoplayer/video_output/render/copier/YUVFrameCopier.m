@@ -44,15 +44,14 @@ NSString *const yuvFragmentShaderString = SHADER_STRING
  );
 
 @interface YUVFrameCopier(){
-    GLuint                              _framebuffer;
-    GLuint                              _outputTextureID;
+    GLuint                              _framebuffer;     // 帧缓冲
+    GLuint                              _outputTextureID;   //输出图像的ID
     
-    
-    GLint                               _uniformMatrix;
-    GLint                               _chromaBInputTextureUniform;
-    GLint                               _chromaRInputTextureUniform;
-    
-    GLuint                              _inputTextures[3];
+    GLint                               _uniformMatrix;       // 矩阵
+    GLint                               _chromaBInputTextureUniform;   //输入图像的色度 蓝色
+    GLint                               _chromaRInputTextureUniform;   //输入图像的色度 红色
+
+    GLuint                              _inputTextures[3];      //输入的图像数组
 }
 
 @end
@@ -62,17 +61,27 @@ NSString *const yuvFragmentShaderString = SHADER_STRING
 - (BOOL) prepareRender:(NSInteger) frameWidth height:(NSInteger) frameHeight;
 {
     BOOL ret = NO;
+    // 按照指定的 顶点着色器 和 片段着色器 创建编译器
     if([self buildProgram:yuvVertexShaderString fragmentShader:yuvFragmentShaderString]) {
+        
+        // 获取工程的 片段着色器中的 s_texture_u  s_texture_v
         _chromaBInputTextureUniform = glGetUniformLocation(filterProgram, "s_texture_u");
         _chromaRInputTextureUniform = glGetUniformLocation(filterProgram, "s_texture_v");
-        
+        // 使显卡绘制程序
         glUseProgram(filterProgram);
+        
+        // 设置图像的postion
         glEnableVertexAttribArray(filterPositionAttribute);
+        // 设置图像的纹理 textureCoordinate
         glEnableVertexAttribArray(filterTextureCoordinateAttribute);
+        
         //生成FBO And TextureId
+        // 生成帧缓存对象（frame buffer object）
         glGenFramebuffers(1, &_framebuffer);
+        // 绑定FBO 到 管线
         glBindFramebuffer(GL_FRAMEBUFFER, _framebuffer);
         
+        // 绑定纹理
         glActiveTexture(GL_TEXTURE1);
         glGenTextures(1, &_outputTextureID);
         glBindTexture(GL_TEXTURE_2D, _outputTextureID);

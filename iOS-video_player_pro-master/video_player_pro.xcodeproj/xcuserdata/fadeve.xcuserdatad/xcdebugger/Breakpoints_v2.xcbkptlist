@@ -9,14 +9,14 @@
             shouldBeEnabled = "Yes"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "video_player_pro/videoplayer/video_output/VideoOutput.m"
-            timestampString = "567338845.908988"
+            filePath = "video_player_pro/videoplayer/video_output/render/copier/YUVFrameCopier.m"
+            timestampString = "567766404.89008"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "262"
-            endingLineNumber = "262"
-            landmarkName = "-createDisplayFramebuffer"
-            landmarkType = "7">
+            startingLineNumber = "5"
+            endingLineNumber = "5"
+            landmarkName = "unknown"
+            landmarkType = "0">
          </BreakpointContent>
       </BreakpointProxy>
       <BreakpointProxy
@@ -25,13 +25,13 @@
             shouldBeEnabled = "Yes"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "video_player_pro/videoplayer/video_output/VideoOutput.m"
-            timestampString = "567338845.9094011"
+            filePath = "video_player_pro/videoplayer/video_output/render/copier/YUVFrameCopier.m"
+            timestampString = "567766404.8904231"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "180"
-            endingLineNumber = "180"
-            landmarkName = "-presentVideoFrame:"
+            startingLineNumber = "63"
+            endingLineNumber = "63"
+            landmarkName = "-prepareRender:height:"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
