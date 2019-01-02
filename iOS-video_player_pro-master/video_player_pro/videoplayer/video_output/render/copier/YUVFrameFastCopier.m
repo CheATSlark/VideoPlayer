@@ -11,8 +11,10 @@
 #import <OpenGLES/EAGL.h>
 
 // Color Conversion Constants (YUV to RGB) including adjustment from 16-235/16-240 (video range)
+// 颜色转换常量（YUV 到 RGB） 包含适应从 16-235 / 16- 240 （视频范围）
 
 // BT.601, which is the standard for SDTV.
+// YCbCr 是标准数字电视
 __unused static const GLfloat kColorConversion601[] = {
     1.164,  1.164, 1.164,
     0.0, -0.392, 2.017,
@@ -32,6 +34,7 @@ GLfloat kColorConversion601FullRange[] = {
 };
 
 // BT.709, which is the standard for HDTV.
+//
 static const GLfloat kColorConversion709[] = {
     1.164,  1.164, 1.164,
     0.0, -0.213, 2.112,
