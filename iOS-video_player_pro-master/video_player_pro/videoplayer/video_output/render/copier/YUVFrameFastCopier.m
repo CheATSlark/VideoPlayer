@@ -34,13 +34,14 @@ GLfloat kColorConversion601FullRange[] = {
 };
 
 // BT.709, which is the standard for HDTV.
-//
+// YCbCr 是高清数字电视
 static const GLfloat kColorConversion709[] = {
     1.164,  1.164, 1.164,
     0.0, -0.213, 2.112,
     1.793, -0.533,   0.0,
 };
 
+// 字符化
 NSString *const yuvFasterVertexShaderString = SHADER_STRING
 (
  attribute vec4 position;
@@ -59,6 +60,7 @@ NSString *const yuvFasterVertexShaderString = SHADER_STRING
  * Passthrough shader for displaying CVPixelbuffers
  *
  **/
+// 传递着色器为了展示CVPixelBuffer
 NSString *const yuvFasterFragmentShaderString = SHADER_STRING
 (
  varying highp vec2 v_texcoord;
@@ -85,19 +87,19 @@ NSString *const yuvFasterFragmentShaderString = SHADER_STRING
  }
 );
 @interface YUVFrameFastCopier(){
-    GLuint                              _framebuffer;
-    GLuint                              _outputTextureID;
+    GLuint                              _framebuffer;    //帧缓存
+    GLuint                              _outputTextureID;  // 输出内容ID
     
-    GLint                               _uniformMatrix;
+    GLint                               _uniformMatrix;  // 格式矩阵
     GLint                               _chromaInputTextureUniform;
     GLint                               _colorConversionMatrixUniform;
     
-    CVOpenGLESTextureRef                _lumaTexture;
-    CVOpenGLESTextureRef                _chromaTexture;
-    CVOpenGLESTextureCacheRef           _videoTextureCache;
-    const GLfloat*                      _preferredConversion;
+    CVOpenGLESTextureRef                _lumaTexture;    //亮度内容
+    CVOpenGLESTextureRef                _chromaTexture;  // 色度内容
+    CVOpenGLESTextureCacheRef           _videoTextureCache;  // 视频内容缓存
+    const GLfloat*                      _preferredConversion; //偏好转换
     
-    CVPixelBufferPoolRef                _pixelBufferPool;
+    CVPixelBufferPoolRef                _pixelBufferPool;  //像素缓存池
 }
 
 @end
@@ -106,17 +108,22 @@ NSString *const yuvFasterFragmentShaderString = SHADER_STRING
 - (BOOL) prepareRender:(NSInteger) frameWidth height:(NSInteger) frameHeight;
 {
     BOOL ret = NO;
+    // 按照 vertexShader 和 fragmentShader 创建 program
     if([self buildProgram:yuvFasterVertexShaderString fragmentShader:yuvFasterFragmentShaderString]) {
+        // 获取 SamplerUV
         _chromaInputTextureUniform = glGetUniformLocation(filterProgram, "SamplerUV");
+        //
         _colorConversionMatrixUniform = glGetUniformLocation(filterProgram, "colorConversionMatrix");
         
         glUseProgram(filterProgram);
         glEnableVertexAttribArray(filterPositionAttribute);
         glEnableVertexAttribArray(filterTextureCoordinateAttribute);
+        
         //生成FBO And TextureId
         glGenFramebuffers(1, &_framebuffer);
         glBindFramebuffer(GL_FRAMEBUFFER, _framebuffer);
         
+        // 进行输出配置
         glActiveTexture(GL_TEXTURE1);
         glGenTextures(1, &_outputTextureID);
         glBindTexture(GL_TEXTURE_2D, _outputTextureID);
@@ -162,10 +169,14 @@ NSString *const yuvFasterFragmentShaderString = SHADER_STRING
 
 - (void) uploadTexture:(VideoFrame*) videoFrame width:(int) frameWidth height:(int) frameHeight;
 {
+    // 这是用code Video 进行
+    // 图像缓存
     CVImageBufferRef pixelBuffer = nil;
     if(videoFrame.type == VideoFrameType){
+        // 视频类型
         pixelBuffer = [self buildCVPixelBufferByVideoFrame:videoFrame width:frameWidth height:frameHeight];
     } else if(videoFrame.type == iOSCVVideoFrameType) {
+        // 硬解的像素
         pixelBuffer = (__bridge CVImageBufferRef)videoFrame.imageBuffer;
 //        CFTypeRef colorAttachments = CVBufferGetAttachment(pixelBuffer, kCVImageBufferYCbCrMatrixKey, NULL);
 //        if (colorAttachments != NULL)
@@ -181,6 +192,7 @@ NSString *const yuvFasterFragmentShaderString = SHADER_STRING
         glActiveTexture(GL_TEXTURE0);
         
         CVReturn err;
+        // 创建_videoTextureCache  _lumaTexture
         err = CVOpenGLESTextureCacheCreateTextureFromImage(kCFAllocatorDefault,
                                                            _videoTextureCache,
                                                            pixelBuffer,
@@ -200,6 +212,7 @@ NSString *const yuvFasterFragmentShaderString = SHADER_STRING
         }
         
         glBindTexture(CVOpenGLESTextureGetTarget(_lumaTexture), CVOpenGLESTextureGetName(_lumaTexture));
+        // 纹理过滤
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -248,6 +261,7 @@ NSString *const yuvFasterFragmentShaderString = SHADER_STRING
         [attributes setObject:[NSNumber numberWithInt:frameHeight] forKey:(NSString*) kCVPixelBufferHeightKey];
         [attributes setObject:@(videoFrame.linesize) forKey:(NSString*) kCVPixelBufferBytesPerRowAlignmentKey];
         [attributes setObject:[NSDictionary dictionary] forKey:(NSString*)kCVPixelBufferIOSurfacePropertiesKey];
+        // 创建pixelBufferPool  一个新的像素缓存池
         error = CVPixelBufferPoolCreate(kCFAllocatorDefault, NULL, (__bridge CFDictionaryRef)attributes, &_pixelBufferPool);
         if(error != kCVReturnSuccess){
             NSLog(@"CVPixelBufferPool Create Failed...");
@@ -256,11 +270,13 @@ NSString *const yuvFasterFragmentShaderString = SHADER_STRING
     if(!_pixelBufferPool){
         NSLog(@"pixelBuffer Pool is NULL...");
     }
+    // 从缓存池中创建一个新的像素缓存对象
     CVPixelBufferPoolCreatePixelBuffer(NULL, _pixelBufferPool, &pixelBuffer);
     if(!pixelBuffer){
         NSLog(@"CVPixelBufferPoolCreatePixelBuffer Failed...");
     }
     
+    // 双平面
     size_t bytePerRowY = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0);
     size_t bytePerRowUV = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 1);
     int lumaDataSize = (int)bytePerRowY * frameHeight;
@@ -314,6 +330,7 @@ NSString *const yuvFasterFragmentShaderString = SHADER_STRING
 
 - (void) renderWithTexId:(VideoFrame*) videoFrame;
 {
+    // 准备渲染工作
     int frameWidth = (int)[videoFrame width];
     int frameHeight = (int)[videoFrame height];
     glBindFramebuffer(GL_FRAMEBUFFER, _framebuffer);
@@ -322,6 +339,7 @@ NSString *const yuvFasterFragmentShaderString = SHADER_STRING
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
+    // 获取 Y UV
     [self uploadTexture:videoFrame width:frameWidth height:frameHeight];
     
     static const GLfloat imageVertices[] = {
@@ -338,14 +356,18 @@ NSString *const yuvFasterFragmentShaderString = SHADER_STRING
         1.0f, 0.0f,
     };
     
+    // 指定filterPositionAttribute
     glVertexAttribPointer(filterPositionAttribute, 2, GL_FLOAT, 0, 0, imageVertices);
     glEnableVertexAttribArray(filterPositionAttribute);
+    // 指定filterTextureCoordinateAttribute
     glVertexAttribPointer(filterTextureCoordinateAttribute, 2, GL_FLOAT, 0, 0, noRotationTextureCoordinates);
     glEnableVertexAttribArray(filterTextureCoordinateAttribute);
     
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, CVOpenGLESTextureGetName(_lumaTexture));
     glUniform1i(filterInputTextureUniform, 0);
+    
+    
     glActiveTexture(GL_TEXTURE1);
     glBindTexture(GL_TEXTURE_2D, CVOpenGLESTextureGetName(_chromaTexture));
     glUniform1i(_chromaInputTextureUniform, 1);

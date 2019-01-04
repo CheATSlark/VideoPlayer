@@ -9,13 +9,13 @@
             shouldBeEnabled = "Yes"
             ignoreCount = "0"
             continueAfterRunningActions = "No"
-            filePath = "video_player_pro/videoplayer/video_output/render/copier/YUVFrameCopier.m"
-            timestampString = "568093596.25756"
+            filePath = "video_player_pro/videoplayer/video_output/render/copier/YUVFrameFastCopier.m"
+            timestampString = "568178204.840696"
             startingColumnNumber = "9223372036854775807"
             endingColumnNumber = "9223372036854775807"
-            startingLineNumber = "192"
-            endingLineNumber = "192"
-            landmarkName = "-renderWithTexId:"
+            startingLineNumber = "117"
+            endingLineNumber = "117"
+            landmarkName = "-prepareRender:height:"
             landmarkType = "7">
          </BreakpointContent>
       </BreakpointProxy>
