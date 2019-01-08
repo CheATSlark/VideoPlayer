@@ -15,6 +15,7 @@ const NSTimeInterval AUSAudioSessionLatency_LowLatency = 0.0058;
 
 @implementation ELAudioSession
 
+// 单例
 + (ELAudioSession *)sharedInstance
 {
     static ELAudioSession *instance = NULL;
@@ -50,9 +51,11 @@ const NSTimeInterval AUSAudioSessionLatency_LowLatency = 0.0058;
     
     NSError *error = nil;
     
+    // 设置偏好采样率
     if(![self.audioSession setPreferredSampleRate:self.preferredSampleRate error:&error])
         NSLog(@"Error when setting sample rate on audio session: %@", error.localizedDescription);
     
+    // 设置激活状态
     if(![self.audioSession setActive:_active error:&error])
         NSLog(@"Error when setting active state of audio session: %@", error.localizedDescription);
     
@@ -68,6 +71,7 @@ const NSTimeInterval AUSAudioSessionLatency_LowLatency = 0.0058;
         NSLog(@"Error when setting preferred I/O buffer duration");
 }
 
+// 添加路径改变的监听
 - (void)addRouteChangeListener
 {
     [[NSNotificationCenter defaultCenter] addObserver:self

@@ -16,8 +16,8 @@
 
 @interface AudioOutput : NSObject
 
-@property(nonatomic, assign) Float64 sampleRate;
-@property(nonatomic, assign) Float64 channels;
+@property(nonatomic, assign) Float64 sampleRate;    //样本率
+@property(nonatomic, assign) Float64 channels;   //声道
 
 - (id) initWithChannels:(NSInteger) channels sampleRate:(NSInteger) sampleRate bytesPerSample:(NSInteger) bytePerSample filleDataDelegate:(id<FillDataDelegate>) fillAudioDataDelegate;
 

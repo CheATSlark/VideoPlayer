@@ -40,7 +40,9 @@ NSString *const kDirectPassFragmentShaderString = SHADER_STRING
 - (BOOL) prepareRender:(NSInteger) frameWidth height:(NSInteger) frameHeight;
 {
     BOOL ret = NO;
+    // 根据特定的 顶点着色器 和片段着色器 创建program
     if([self buildProgram:kDirectPassVertexShaderString fragmentShader:kDirectPassFragmentShaderString]) {
+        // 使用显卡绘制工程 获取相应参数
         glUseProgram(filterProgram);
         glEnableVertexAttribArray(filterPositionAttribute);
         glEnableVertexAttribArray(filterTextureCoordinateAttribute);
@@ -51,15 +53,20 @@ NSString *const kDirectPassFragmentShaderString = SHADER_STRING
 
 - (void) renderWithWidth:(NSInteger) width height:(NSInteger) height position:(float)position
 {
+    // 渲染
     glUseProgram(filterProgram);
+    
+    // 清除
     glViewport(0, 0, (int)width, (int)height);
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     
+    // 激活纹理0
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, _inputTexId);
     glUniform1i(filterInputTextureUniform, 0);
     
+    // 图像在中心位置
     static const GLfloat imageVertices[] = {
         -1.0f, -1.0f,
         1.0f, -1.0f,
@@ -73,9 +80,11 @@ NSString *const kDirectPassFragmentShaderString = SHADER_STRING
         0.0f, 1.0f,
         1.0f, 1.0f,
     };
-    
+    // 物体坐标
     glVertexAttribPointer(filterPositionAttribute, 2, GL_FLOAT, 0, 0, imageVertices);
     glEnableVertexAttribArray(filterPositionAttribute);
+    
+    // 纹理坐标
     glVertexAttribPointer(filterTextureCoordinateAttribute, 2, GL_FLOAT, 0, 0, noRotationTextureCoordinates);
     glEnableVertexAttribArray(filterTextureCoordinateAttribute);
     

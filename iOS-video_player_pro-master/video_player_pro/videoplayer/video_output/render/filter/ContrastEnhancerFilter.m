@@ -51,6 +51,7 @@ NSString *const contrastFragmentShaderString = SHADER_STRING
         glUseProgram(filterProgram);
         glEnableVertexAttribArray(filterPositionAttribute);
         glEnableVertexAttribArray(filterTextureCoordinateAttribute);
+        
         //生成FBO And TextureId
         glGenFramebuffers(1, &_contrastbuffer);
         glBindFramebuffer(GL_FRAMEBUFFER, _contrastbuffer);
@@ -58,12 +59,16 @@ NSString *const contrastFragmentShaderString = SHADER_STRING
         glActiveTexture(GL_TEXTURE1);
         glGenTextures(1, &_contrastTextureID);
         glBindTexture(GL_TEXTURE_2D, _contrastTextureID);
+        
+        // 设置过滤模式
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (int)frameWidth, (int)frameHeight, 0, GL_BGRA, GL_UNSIGNED_BYTE, 0);
         
+        // 生成图片
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (int)frameWidth, (int)frameHeight, 0, GL_BGRA, GL_UNSIGNED_BYTE, 0);
+        // 把FBO 渲染纹理，直接绘制到纹理
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, _contrastTextureID, 0);
         GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
         if (status != GL_FRAMEBUFFER_COMPLETE) {

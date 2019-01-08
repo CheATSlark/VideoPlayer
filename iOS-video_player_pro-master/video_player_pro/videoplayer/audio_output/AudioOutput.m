@@ -56,15 +56,22 @@ static void CheckStatus(OSStatus status, NSString *message, BOOL fatal);
     
     self = [super init];
     if (self) {
+        // 对自定义的音频会话进行设置
         [[ELAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayAndRecord];
         [[ELAudioSession sharedInstance] setPreferredSampleRate:sampleRate];
         [[ELAudioSession sharedInstance] setActive:YES];
         [[ELAudioSession sharedInstance] addRouteChangeListener];
+        // 添加音频监听
         [self addAudioSessionInterruptedObserver];
+        // 初始化 8192 个 SInt16 类型的 空间数组
         _outData = (SInt16 *)calloc(8192, sizeof(SInt16));
+        // 设置代理
         _fillAudioDataDelegate = fillAudioDataDelegate;
+        // 设置采样率
         _sampleRate = sampleRate;
+        // 设置声道
         _channels = channels;
+        // 创建音频单元表
         [self createAudioUnitGraph];
     }
     return self;
@@ -73,17 +80,18 @@ static void CheckStatus(OSStatus status, NSString *message, BOOL fatal);
 - (void)createAudioUnitGraph
 {
     OSStatus status = noErr;
-    
+    // 创建一个 AUGraph
     status = NewAUGraph(&_auGraph);
     CheckStatus(status, @"Could not create a new AUGraph", YES);
-    
+    // 添加音频单元
     [self addAudioUnitNodes];
-    
+    // 打开 AUGraph
     status = AUGraphOpen(_auGraph);
     CheckStatus(status, @"Could not open AUGraph", YES);
     
+    // 获取 IO单元 和 转换单元
     [self getUnitsFromNodes];
-    
+    // 设置音频属性
     [self setAudioUnitProperties];
     
     [self makeNodeConnections];
@@ -97,20 +105,25 @@ static void CheckStatus(OSStatus status, NSString *message, BOOL fatal);
 - (void)addAudioUnitNodes
 {
     OSStatus status = noErr;
-    
+    // 描述单元的 和定义一些组分  IO 单元
     AudioComponentDescription ioDescription;
+    // 置空描述的内存
     bzero(&ioDescription, sizeof(ioDescription));
+    // 格式
     ioDescription.componentManufacturer = kAudioUnitManufacturer_Apple;
+    // 音频类型 输出
     ioDescription.componentType = kAudioUnitType_Output;
+    // 子类型 采集和播放
     ioDescription.componentSubType = kAudioUnitSubType_RemoteIO;
-    
+    // 添加到 AUGraph
     status = AUGraphAddNode(_auGraph, &ioDescription, &_ioNode);
     CheckStatus(status, @"Could not add I/O node to AUGraph", YES);
     
-    
+    // 转换单元
     AudioComponentDescription convertDescription;
     bzero(&convertDescription, sizeof(convertDescription));
     ioDescription.componentManufacturer = kAudioUnitManufacturer_Apple;
+    
     ioDescription.componentType = kAudioUnitType_FormatConverter;
     ioDescription.componentSubType = kAudioUnitSubType_AUConverter;
     status = AUGraphAddNode(_auGraph, &ioDescription, &_convertNode);
@@ -132,6 +145,7 @@ static void CheckStatus(OSStatus status, NSString *message, BOOL fatal);
 - (void)setAudioUnitProperties
 {
     OSStatus status = noErr;
+    // 音频格式 把声道里
     AudioStreamBasicDescription streamFormat = [self nonInterleavedPCMFormatWithChannels:_channels];
     
     status = AudioUnitSetProperty(_ioUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, inputElement,
@@ -159,11 +173,13 @@ static void CheckStatus(OSStatus status, NSString *message, BOOL fatal);
 
 - (AudioStreamBasicDescription)nonInterleavedPCMFormatWithChannels:(UInt32)channels
 {
+    // 每个样本的字节
     UInt32 bytesPerSample = sizeof(Float32);
     
     AudioStreamBasicDescription asbd;
     bzero(&asbd, sizeof(asbd));
     asbd.mSampleRate = _sampleRate;
+    // 格式为线性PCM
     asbd.mFormatID = kAudioFormatLinearPCM;
     asbd.mFormatFlags = kAudioFormatFlagsNativeFloatPacked | kAudioFormatFlagIsNonInterleaved;
     asbd.mBitsPerChannel = 8 * bytesPerSample;
