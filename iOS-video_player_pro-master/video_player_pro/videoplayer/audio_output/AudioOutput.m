@@ -91,9 +91,9 @@ static void CheckStatus(OSStatus status, NSString *message, BOOL fatal);
     
     // 获取 IO单元 和 转换单元
     [self getUnitsFromNodes];
-    // 设置音频属性
+    // 设置各个音频单元属性
     [self setAudioUnitProperties];
-    
+    // 单元连接
     [self makeNodeConnections];
     
     CAShow(_auGraph);
@@ -147,12 +147,12 @@ static void CheckStatus(OSStatus status, NSString *message, BOOL fatal);
     OSStatus status = noErr;
     // 音频格式 把声道里
     AudioStreamBasicDescription streamFormat = [self nonInterleavedPCMFormatWithChannels:_channels];
-    
+    // 输出范围的音频单元的格式设置
     status = AudioUnitSetProperty(_ioUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, inputElement,
                                   &streamFormat, sizeof(streamFormat));
     CheckStatus(status, @"Could not set stream format on I/O unit output scope", YES);
     
-    
+    //格式设置
     AudioStreamBasicDescription _clientFormat16int;
     UInt32 bytesPerSample = sizeof (SInt16);
     bzero(&_clientFormat16int, sizeof(_clientFormat16int));
@@ -164,9 +164,12 @@ static void CheckStatus(OSStatus status, NSString *message, BOOL fatal);
     _clientFormat16int.mChannelsPerFrame  = _channels;
     _clientFormat16int.mBitsPerChannel    = 8 * bytesPerSample;
     _clientFormat16int.mSampleRate        = _sampleRate;
+    
     // spectial format for converter
+    //输出
     status =AudioUnitSetProperty(_convertUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 0, &streamFormat, sizeof(streamFormat));
     CheckStatus(status, @"augraph recorder normal unit set client format error", YES);
+    //输入
     status = AudioUnitSetProperty(_convertUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, &_clientFormat16int, sizeof(_clientFormat16int));
     CheckStatus(status, @"augraph recorder normal unit set client format error", YES);
 }
@@ -194,10 +197,11 @@ static void CheckStatus(OSStatus status, NSString *message, BOOL fatal);
 - (void)makeNodeConnections
 {
     OSStatus status = noErr;
-    
+    // 直接把音频单元进行连接
     status = AUGraphConnectNodeInput(_auGraph, _convertNode, 0, _ioNode, 0);
     CheckStatus(status, @"Could not connect I/O node input to mixer node input", YES);
     
+    // 把回调和音频单元连接
     AURenderCallbackStruct callbackStruct;
     callbackStruct.inputProc = &InputRenderCallback;
     callbackStruct.inputProcRefCon = (__bridge void *)self;
@@ -221,6 +225,7 @@ static void CheckStatus(OSStatus status, NSString *message, BOOL fatal);
 
 - (BOOL)play
 {
+    // 播放
     OSStatus status = AUGraphStart(_auGraph);
     CheckStatus(status, @"Could not start AUGraph", YES);
     return YES;
@@ -228,6 +233,7 @@ static void CheckStatus(OSStatus status, NSString *message, BOOL fatal);
 
 - (void)stop
 {
+    // 停止
     OSStatus status = AUGraphStop(_auGraph);
     CheckStatus(status, @"Could not stop AUGraph", YES);
 }
@@ -297,6 +303,7 @@ static void CheckStatus(OSStatus status, NSString *message, BOOL fatal);
 
 @end
 
+// 转换单元的回调
 static OSStatus InputRenderCallback(void *inRefCon,
                                     AudioUnitRenderActionFlags *ioActionFlags,
                                     const AudioTimeStamp *inTimeStamp,
